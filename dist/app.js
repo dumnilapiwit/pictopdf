@@ -69,6 +69,14 @@ function removeAt(i){
  if(current===it){current=items[Math.min(i,items.length-1)]||null;if(current){select(current);return}}
  render();
 }
+$('clearAll').onclick=()=>{
+ if(busy||!items.length)return;
+ if(!confirm(`ลบรูปทั้งหมด ${items.length} รูป และ PDF ที่สร้างไว้? รูปต้นฉบับในเครื่องจะไม่ถูกลบ`))return;
+ for(const it of items)URL.revokeObjectURL(it.thumb);items.length=0;
+ if(cache.can)cache.can.width=cache.can.height=1;cache={it:null,can:null};current=null;invalidate();
+ if(readyURL)URL.revokeObjectURL(readyURL);readyURL=null;readyFile=null;$('downloadPanel').hidden=true;
+ const ed=$('editor');ed.width=ed.height=1;render();status('ลบรูปทั้งหมดแล้ว · เลือกรูปชุดใหม่ได้เลย');$('upload').scrollIntoView({behavior:'smooth'});
+};
 function move(i,d){[items[i],items[i+d]]=[items[i+d],items[i]];render()}
 function detectOn(it,src){
  const scale=Math.min(1,480/Math.max(src.width,src.height)),c=document.createElement('canvas');c.width=Math.round(src.width*scale);c.height=Math.round(src.height*scale);
