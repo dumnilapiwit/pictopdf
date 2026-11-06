@@ -154,7 +154,12 @@ function core(g0,w,h){
 function findScreen(data,w,h){
  const N=w*h,full=()=>[{x:0,y:0},{x:w-1,y:0},{x:w-1,y:h-1},{x:0,y:h-1}];
  const lum=new Float32Array(N);for(let i=0;i<N;i++)lum[i]=.299*data[4*i]+.587*data[4*i+1]+.114*data[4*i+2];
- const best=core(lum,w,h);
+ // Pass 1: bright slide on a darker surround (projector, most screens).
+ // Pass 2: inverted, i.e. a dark TV body/bezel on a lighter wall. This frames
+ // the whole TV, which works even when the slide itself has a black background.
+ const A=core(lum,w,h),inv=new Float32Array(N);for(let i=0;i<N;i++)inv[i]=255-lum[i];
+ const B=core(inv,w,h);
+ const best=B&&(!A||B.s>A.s*1.3)?{...B,m:B.m+'/tv'}:A;
  if(!best||best.s<1.5)return{points:full(),confidence:'low',found:0};
  const onBorder=(a,b)=>(a.x<3&&b.x<3)||(a.y<3&&b.y<3)||(a.x>w-4&&b.x>w-4)||(a.y>h-4&&b.y>h-4);
  let found=0;for(let i=0;i<4;i++)if(!onBorder(best.pts[i],best.pts[(i+1)%4]))found++;
