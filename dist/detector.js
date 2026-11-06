@@ -10,14 +10,15 @@
 //       (robust to dark pictures inside the slide and occluding heads/hands);
 //     - "sides": RANSAC line per side, corner where the straight run ends
 //       (cuts off a table or fabric merged into the region);
+//     - "lines": strongest straight edge lines (Hough), every combination
+//       (finds a slide panel inside an LED wall; used only if clearly better);
 //  4) score each candidate by edge evidence along its sides and keep the best.
 // Sides on the photo border (screen cut off) are kept on the border.
 (function(root){
-function findScreen(data,w,h){
- const N=w*h,full=()=>[{x:0,y:0},{x:w-1,y:0},{x:w-1,y:h-1},{x:0,y:h-1}];
- const low=()=>({points:full(),confidence:'low',found:0});
- // luminance + 3x3 box blur (unblurred copy kept so thin bezels still block growth)
- const g0=new Float32Array(N);for(let i=0;i<N;i++)g0[i]=.299*data[4*i]+.587*data[4*i+1]+.114*data[4*i+2];
+// core: run the whole search on one brightness-like channel g0; returns best candidate
+function core(g0,w,h){
+ const N=w*h;
+ // 3x3 box blur (unblurred copy kept so thin bezels still block growth)
  const blur=(src,r)=>{const t=new Float32Array(N),o=new Float32Array(N);
   for(let y=0;y<h;y++){let s=0,c=0;for(let x=-r;x<w+r;x++){if(x+r<w&&x+r>=0){s+=src[y*w+x+r];c++}if(x-r-1>=0){s-=src[y*w+x-r-1];c--}if(x>=0&&x<w)t[y*w+x]=s/c}}
   for(let x=0;x<w;x++){let s=0,c=0;for(let y=-r;y<h+r;y++){if(y+r<h&&y+r>=0){s+=t[(y+r)*w+x];c++}if(y-r-1>=0){s-=t[(y-r-1)*w+x];c--}if(y>=0&&y<h)o[y*w+x]=s/c}}return o};
@@ -118,7 +119,44 @@ function findScreen(data,w,h){
   for(const [m,q] of [['hull',hullQuad(reg)],['sides',sidesQuad(reg)]]){if(!q)continue;
    const pts=q.map(p=>({x:Math.max(0,Math.min(w-1,p.x)),y:Math.max(0,Math.min(h-1,p.y))}));const sc=score(pts);
    if(sc&&(!best||sc.s>best.s))best={...sc,pts,m,th}}}
- if(!best||best.s<1.5)return low();
+ const regionBest=best;best=null;
+ // ---- candidate C: straight lines (Hough) -----------------------------------
+ // Like a document scanner: find the strongest near-vertical and near-horizontal
+ // edge lines, try every left/right/top/bottom combination and keep the quad with
+ // the best edge evidence. Finds a slide panel even when it touches other
+ // bright areas, as long as its border is a crisp straight edge.
+ {
+  const gx=new Float32Array(N),gy=new Float32Array(N);
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;
+   gx[i]=(g[i-w+1]+2*g[i+1]+g[i+w+1])-(g[i-w-1]+2*g[i-1]+g[i+w-1]);gy[i]=(g[i+w-1]+2*g[i+w]+g[i+w+1])-(g[i-w-1]+2*g[i-w]+g[i-w+1])}
+  const SL=[];for(let a=-.35;a<=.351;a+=.025)SL.push(a);
+  function hough(vertical){
+   const len=vertical?h:w,dep=vertical?w:h,off=Math.round(dep*.15),nb=dep+2*off,acc=new Float32Array(SL.length*nb);
+   for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x,ax=Math.abs(gx[i]),ay=Math.abs(gy[i]),m=vertical?ax:ay;if(m<60||m<(vertical?ay:ax)*1.5)continue;
+    const t=vertical?y-len/2:x-len/2,v=vertical?x:y;for(let s=0;s<SL.length;s++){const b=Math.round(v-SL[s]*t)+off;if(b>=0&&b<nb)acc[s*nb+b]+=Math.min(m,400)}}
+   const peaks=[];const used=new Uint8Array(acc.length);
+   for(let k=0;k<10;k++){let bi=-1,bv=0;for(let i=0;i<acc.length;i++)if(!used[i]&&acc[i]>bv){bv=acc[i];bi=i}if(bi<0||bv<len*60*.25)break;
+    const s=(bi/nb)|0,b=bi%nb-off;peaks.push({a:SL[s],b:b-SL[s]*len/2});
+    for(let s2=0;s2<SL.length;s2++)for(let d=-8;d<=8;d++){const bb=bi%nb+d+Math.round((SL[s]-SL[s2])*0);if(bb>=0&&bb<nb&&Math.abs(s2-s)<=5)used[s2*nb+bb]=1}}
+   peaks.push({a:0,b:0,border:1},{a:0,b:dep-1,border:1});return peaks}
+  const V=hough(true),H=hough(false),mid=(l,len)=>l.a*len/2+l.b;
+  const meet=(v,hz)=>{const y=(hz.a*v.b+hz.b)/(1-hz.a*v.a);return{x:v.a*y+v.b,y}};
+  for(const L of V)for(const R of V){if(mid(R,h)-mid(L,h)<w*.3)continue;
+   for(const T of H)for(const B of H){if(mid(B,w)-mid(T,w)<h*.3)continue;
+    const q=[meet(L,T),meet(R,T),meet(R,B),meet(L,B)];if(q.some(p=>p.x<-6||p.y<-6||p.x>w+5||p.y>h+5))continue;
+    const pts=q.map(p=>({x:Math.max(0,Math.min(w-1,p.x)),y:Math.max(0,Math.min(h-1,p.y))}));const sc=score(pts);
+    if(sc&&(!best||sc.s>best.s))best={...sc,pts,m:'lines'}}}
+ }
+ // region quads hug the real screen border more reliably; lines must win clearly
+ if(regionBest&&(!best||best.s<regionBest.s*1.3))best=regionBest;
+ return best;
+}
+function findScreen(data,w,h){
+ const N=w*h,full=()=>[{x:0,y:0},{x:w-1,y:0},{x:w-1,y:h-1},{x:0,y:h-1}];
+ const lum=new Float32Array(N);for(let i=0;i<N;i++)lum[i]=.299*data[4*i]+.587*data[4*i+1]+.114*data[4*i+2];
+ const best=core(lum,w,h);
+ if(!best||best.s<1.5)return{points:full(),confidence:'low',found:0};
+ const onBorder=(a,b)=>(a.x<3&&b.x<3)||(a.y<3&&b.y<3)||(a.x>w-4&&b.x>w-4)||(a.y>h-4&&b.y>h-4);
  let found=0;for(let i=0;i<4;i++)if(!onBorder(best.pts[i],best.pts[(i+1)%4]))found++;
  return{points:best.pts,confidence:found===4?'high':found>=2?'partial':'low',found,method:best.m};
 }
