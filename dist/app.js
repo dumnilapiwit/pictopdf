@@ -5,6 +5,16 @@ const $=id=>document.getElementById(id),items=[];
 let current=null,mode='original',drag=-1,busy=false,cache={it:null,can:null},previewCache=null,previewTimer=0;
 const status=t=>$('status').textContent=t;
 const MAX_SIDE=1800,MAX_FILES=60;
+// Mode: 'slide' (screen photos -> landscape slides) or 'doc' (paper documents ->
+// A4 pages, portrait or landscape to match each page). Same pipeline otherwise.
+const MODE=window.PICTO_MODE==='doc'?'doc':'slide';
+if(MODE==='doc'){
+ document.title='PictoPDF · สแกนเอกสารจากรูป';
+ $('eyebrow').textContent='SCAN DOCUMENTS FROM PHOTOS';
+ $('headline').innerHTML='ถ่ายเอกสาร<br>ให้เป็น PDF เหมือนสแกน<span>.</span>';
+ $('lede').innerHTML='ถ่ายเอกสาร ใบงาน หรือหน้าหนังสือ วางบนพื้นสีเข้มจะหาขอบได้ดีที่สุด<br>แอปจะตัดขอบ ดึงให้ตรง ทำพื้นขาว แล้วรวมเป็น PDF ขนาด A4';
+ $('dropTitle').textContent='เพิ่มรูปเอกสารของคุณ';
+}
 const full=(w,h)=>[{x:0,y:0},{x:w-1,y:0},{x:w-1,y:h-1},{x:0,y:h-1}];
 // Synchronous toDataURL encoding: async toBlob can be deferred ~1 s per call by
 // the browser's idle scheduling, which made a 60-page export take minutes.
@@ -176,7 +186,7 @@ function autoClean(d,w,h){
 }
 
 // Minimal binary PDF writer: embeds each processed JPEG, no server upload.
-async function makePDF(pages){const encoder=new TextEncoder(),parts=[],offsets=[0];let size=0;const put=s=>{const d=typeof s==='string'?encoder.encode(s):s;parts.push(d);size+=d.length},obj=(id,s)=>{offsets[id]=size;put(`${id} 0 obj\n${s}\nendobj\n`)};put('%PDF-1.4\n');obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,`<< /Type /Pages /Count ${pages.length} /Kids [${pages.map((_,i)=>`${3+i*3} 0 R`).join(' ')}] >>`);for(let i=0;i<pages.length;i++){const {bytes,w,h}=pages[i],id=3+i*3,pw=842,ph=595,scale=Math.min(pw/w,ph/h),dw=w*scale,dh=h*scale,stream=`q ${dw.toFixed(3)} 0 0 ${dh.toFixed(3)} ${((pw-dw)/2).toFixed(3)} ${((ph-dh)/2).toFixed(3)} cm /Im0 Do Q`;obj(id,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im0 ${id+1} 0 R >> >> /Contents ${id+2} 0 R >>`);offsets[id+1]=size;put(`${id+1} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`);put(bytes);put('\nendstream\nendobj\n');obj(id+2,`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`)}const start=size;put(`xref\n0 ${offsets.length}\n0000000000 65535 f \n`);for(let i=1;i<offsets.length;i++)put(`${String(offsets[i]).padStart(10,'0')} 00000 n \n`);put(`trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`);return new Blob(parts,{type:'application/pdf'})}
+async function makePDF(pages){const encoder=new TextEncoder(),parts=[],offsets=[0];let size=0;const put=s=>{const d=typeof s==='string'?encoder.encode(s):s;parts.push(d);size+=d.length},obj=(id,s)=>{offsets[id]=size;put(`${id} 0 obj\n${s}\nendobj\n`)};put('%PDF-1.4\n');obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,`<< /Type /Pages /Count ${pages.length} /Kids [${pages.map((_,i)=>`${3+i*3} 0 R`).join(' ')}] >>`);for(let i=0;i<pages.length;i++){const {bytes,w,h}=pages[i],id=3+i*3,portrait=MODE==='doc'&&h>w,pw=portrait?595:842,ph=portrait?842:595,scale=Math.min(pw/w,ph/h),dw=w*scale,dh=h*scale,stream=`q ${dw.toFixed(3)} 0 0 ${dh.toFixed(3)} ${((pw-dw)/2).toFixed(3)} ${((ph-dh)/2).toFixed(3)} cm /Im0 Do Q`;obj(id,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im0 ${id+1} 0 R >> >> /Contents ${id+2} 0 R >>`);offsets[id+1]=size;put(`${id+1} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`);put(bytes);put('\nendstream\nendobj\n');obj(id+2,`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`)}const start=size;put(`xref\n0 ${offsets.length}\n0000000000 65535 f \n`);for(let i=1;i<offsets.length;i++)put(`${String(offsets[i]).padStart(10,'0')} 00000 n \n`);put(`trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`);return new Blob(parts,{type:'application/pdf'})}
 
 let readyURL=null,readyFile=null;
 $('share').onclick=async()=>{if(!readyFile)return;try{if(navigator.canShare?.({files:[readyFile]}))await navigator.share({files:[readyFile],title:'สมุดสไลด์'});else window.open(readyURL,'_blank','noopener')}catch(e){if(e.name!=='AbortError')status('แชร์ไม่สำเร็จ กรุณาใช้ปุ่มบันทึก PDF หรือเปิด PDF')}};
@@ -195,7 +205,7 @@ $('export').onclick=async()=>{
   }
   if(pages.length!==snapshot.length)throw Error('จำนวนหน้าไม่ตรง กรุณาสร้างใหม่');
   const pdf=await makePDF(pages);if(readyURL)URL.revokeObjectURL(readyURL);readyURL=URL.createObjectURL(pdf);
-  const d=new Date(),z=n=>String(n).padStart(2,'0'),filename=`PictoPDF-${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}-${snapshot.length}p.pdf`;
+  const d=new Date(),z=n=>String(n).padStart(2,'0'),filename=`${MODE==='doc'?'Scan':'PictoPDF'}-${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}-${snapshot.length}p.pdf`;
   readyFile=new File([pdf],filename,{type:'application/pdf'});
   $('savePDF').href=readyURL;$('savePDF').download=filename;$('openPDF').href=readyURL;
   $('downloadInfo').textContent=`พร้อมบันทึก ${snapshot.length} หน้า · ${(pdf.size/1048576).toFixed(1)} MB`;

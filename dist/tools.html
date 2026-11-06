@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PictoPDF · เครื่องมือรูปภาพ</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#244d40"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-180.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="PictoPDF">
+<link rel="stylesheet" href="style.css?v=11">
+<header><a href="./">▱ PictoPDF</a><span>จากห้องเรียน สู่เวลาอ่านทบทวน</span><small>ประมวลผลในเครื่องคุณ</small></header>
+<nav class="modes" aria-label="เลือกโหมด"><a href="./" data-mode="slide">แปลงสไลด์</a><a href="./?mode=doc" data-mode="doc">สแกนเอกสาร</a><a href="tools.html?mode=compress" data-mode="compress">บีบอัดรูป</a><a href="tools.html?mode=convert" data-mode="convert">แปลงไฟล์</a></nav>
+<main>
+<section class="intro"><div class="eyebrow" id="eyebrow"></div><h1 id="headline"></h1><p id="lede"></p></section>
+<section id="upload"><label class="drop" id="drop"><input id="files" type="file" accept="image/*" multiple><b>＋</b><h2 id="dropTitle">เพิ่มรูปของคุณ</h2><p>คลิกเพื่อเลือกรูป หรือลากรูปมาวางที่นี่</p><span>เลือกได้หลายรูป · สูงสุด 100 รูปต่อครั้ง</span></label></section>
+<section class="toolOptions" aria-label="ตัวเลือก">
+ <label>รูปแบบไฟล์ผลลัพธ์
+  <select id="format"><option value="image/jpeg">JPG (เล็ก เหมาะกับรูปถ่าย)</option><option value="image/webp">WebP (เล็กที่สุด)</option><option value="image/png">PNG (ไม่เสียคุณภาพ ไฟล์ใหญ่)</option></select></label>
+ <label>ขนาดด้านยาวสูงสุด
+  <select id="maxSide"><option value="0">เท่าต้นฉบับ</option><option value="3840">3840 px (4K)</option><option value="2560">2560 px</option><option value="1920">1920 px (Full HD)</option><option value="1280">1280 px</option><option value="1024">1024 px</option><option value="800">800 px</option></select></label>
+ <label id="qualityWrap">คุณภาพ <output id="qualityOut">75</output>%
+  <input type="range" id="quality" min="30" max="95" value="75"></label>
+</section>
+<div id="status" role="status" aria-live="polite"></div>
+<section id="results" hidden>
+ <div class="toolbar"><div><h2>ผลลัพธ์ <small id="summary"></small></h2><p id="resultHint">กดชื่อไฟล์เพื่อบันทึกทีละรูป หรือบันทึกทั้งหมดในครั้งเดียว</p></div>
+  <div class="toolActions"><button id="clearAll" class="secondary">ลบทั้งหมด</button><button id="run">เริ่มทำงาน →</button></div></div>
+ <div class="downloadActions" id="bulk" hidden><a id="zip" class="primaryLink">บันทึกทั้งหมด (.zip) ↓</a><button id="share" class="secondary" hidden>แชร์ / บันทึกลงรูปภาพ</button></div>
+ <ul id="fileList" class="fileList"></ul>
+</section>
+<footer><span>PictoPDF</span><span>รูปของคุณอยู่ในเบราว์เซอร์ · ข้อมูลตำแหน่ง (GPS) และ EXIF ในรูปจะถูกลบออกจากไฟล์ผลลัพธ์</span></footer>
+</main>
+<script src="nav.js?v=11"></script><script src="tools.js?v=11"></script>
+</html>
